@@ -14,18 +14,14 @@ logging.basicConfig(
 
 def is_emoji_only(text: str) -> bool:
     if not text: return False
-    # Remove whitespace and common punctuation that might be used with emojis
     cleaned = re.sub(r'[\s\.\,\!\?\(\)\[\]\{\}\-\_\:\;]', '', text)
     if not cleaned: return False
     
-    # Handle animated dice/slots which are special text-based dice in TG
     if cleaned in ['🎰', '🎲', '🎯', '🏀', '⚽', '🎳']:
         return True
 
-    # A more robust check for emoji-only using replace_emoji
     remaining = emoji.replace_emoji(cleaned, replace='')
     
-    # If anything remains, it's not JUST emojis
     return len(remaining) == 0
 
 def can_mute_user(muter_id: int, target_id: int) -> bool:
@@ -73,7 +69,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     db.add_user_to_chat(user_id, chat_id)
     
-    # Sync chat members
     try:
         admins = await context.bot.get_chat_administrators(chat_id)
         for admin in admins:
@@ -195,7 +190,6 @@ async def setlevel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     old_level = db.get_user_level(target_id)
     
-    # Try to get fresh info from chat if possible
     try:
         chat_member = await context.bot.get_chat_member(chat_id, target_id)
         target_username = chat_member.user.username
@@ -690,7 +684,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await db.update_chat_owner_level(chat_id, context.bot)
         
-        # Priority check for media
         if update.message.sticker:
             await handle_sticker(update, context, user_id, "стикер")
             return
@@ -702,7 +695,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await handle_text(update, context, user_id, chat_id, update.message.dice.emoji)
             return
             
-        # Check text last (including caption for media like Photos which could have emoji spam)
         message_text = update.message.text or update.message.caption
         if message_text:
             db.add_user_to_chat(user_id, chat_id) # Ensure user is linked to chat on message
@@ -720,7 +712,6 @@ async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE, use
     if user_level < 3:
         db.add_sticker_record(user_id)
         
-        # Check for both stickers and short videos/animations which might be stickers
         sticker_count = db.get_recent_stickers(user_id, STICKER_TIME_WINDOW)
         
         if sticker_count >= STICKER_SPAM_THRESHOLD:
@@ -738,7 +729,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE,
     
     await db.update_chat_owner_level(chat_id, context.bot)
     
-    # Check if message is a command first
     if message_text.startswith('/'):
         return
 
@@ -799,8 +789,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE,
     if user_level < 3 and user_id not in SENIOR_ADMIN_IDS:
         is_spam = is_emoji_only(message_text)
         
-        # Check if the message contains any premium/custom emojis or just many emojis
-        # Telegram entities can also indicate custom emojis
         if not is_spam and update.message.entities:
             custom_emoji_entities = [e for e in update.message.entities if e.type in ('custom_emoji', 'premium_animation')]
             if custom_emoji_entities:
@@ -814,7 +802,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE,
         if is_spam:
             recent_messages = db.get_recent_spam_messages(user_id, SPAM_THRESHOLD)
             
-            # Filter only for spam messages in recent history
             if len(recent_messages) >= SPAM_THRESHOLD:
                 if can_mute_user(context.bot.id, user_id):
                     await mute_user(update, context, user_id, "спам эмодзи")
